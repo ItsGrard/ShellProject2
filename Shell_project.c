@@ -51,7 +51,7 @@ void manej(){
 		if(current -> state != FOREGROUND){
 				int pid_wait = waitpid(current -> pgid, &estado  ,WNOHANG | WUNTRACED | WCONTINUED);
 				status_res = analyze_status(estado, &info);
-			//	printf("estado es %s", status_strings[status_res]);
+		
 				if (pid_wait == current -> pgid){
 					printf("Process pid: %s, pid=%i, estado = %s\n", current->command, pid_wait, status_strings[status_res]);
 					fflush(stdout);
@@ -68,7 +68,7 @@ void manej(){
 				}
 		}
 	}
-	//printf(ANSI_COLOR_YELLOW "comprobacion de respuesta de delete_job(), devuelve: %d\n " ANSI_COLOR_RESET, x);
+	
 }
 
 int main(void)
@@ -145,7 +145,7 @@ int main(void)
 			job * task = get_item_bypos(lista, position);
 			
 			task->state = BACKGROUND;
-			killpg(task->pgid, SIGCONT); //señal de continuar
+			killpg(task->pgid, SIGCONT); //continue signal
 			printf("Background pid: %d, command: %s\n", task->pgid, task->command);
 
 		}else if((strcmp(args[0], "exit") == 0)){ 
@@ -182,11 +182,11 @@ int main(void)
 			new_process_group(getpid());
 				
 		if( background == 0){ 
-			set_terminal(getpid()); //why does background work backwards???? 27/4 fixed? idek anymore
+			set_terminal(getpid()); // works properly
 			restore_terminal_signals(); 
 		}
 			execvp(args[0], args);	
-			//perror("Error, command not found: "); comented cause I cant insert variables here
+			// cant insert variables in perror so there it goes, a beautiful printf
 			printf(ANSI_COLOR_RED "Error: command not found: %s\n" ANSI_COLOR_RESET, args[0]);
 			
 			exit(EXIT_FAILURE);
