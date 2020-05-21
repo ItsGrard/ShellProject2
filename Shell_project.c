@@ -40,7 +40,7 @@ To compile and run the program:
 job * lista;
 
 void manej(){
-	//printf( ANSI_COLOR_YELLOW " Comprobacion, dentro del manejador\n" ANSI_COLOR_RESET );
+	
 	enum status status_res; 
 	int estado, info;
 	job * current;
@@ -56,10 +56,10 @@ void manej(){
 					printf("Process pid: %s, pid=%i, estado = %s\n", current->command, pid_wait, status_strings[status_res]);
 					fflush(stdout);
 					if (status_res == CONTINUED) current -> state = BACKGROUND; //Check if its running in background and updates state to background
-					else if (status_res == SUSPENDED){ 
-					current -> state = STOPPED; //Checks if it's suspended or signaled and changes status to stopped, not working
+					else if (status_res == SUSPENDED){     //Checks if it's suspended and changes status to stopped
+					current -> state = STOPPED; 
 					}
-					else if((status_res == EXITED || status_res == SIGNALED)) { //if it has exited or being signaled, it is deleted from the list
+					else if((status_res == EXITED || status_res == SIGNALED)) { //if it has exited or been signaled, it is deleted from the list
 						block_SIGCHLD();
 						int x = delete_job(lista, current);
 						unblock_SIGCHLD();
@@ -83,7 +83,7 @@ int main(void)
 	char pwd[MAX_LINE];
 	ignore_terminal_signals(); //Ignore
 	lista = new_list("lista");
-	signal(SIGCHLD, manej);	
+	signal(SIGCHLD, manej);		//If a signal is detected invoke manej()
 	printf(ANSI_COLOR_MAGENTA "Welcome to the best shell you'll ever see. Use ctrl^D or 'exit' to exit the Shell, use any unix command to execute it and use 'zurprise' for a... surprise ;)\n");
 	while (1)   /* Program terminates normally inside get_command() after ^D is typed*/
 	{   	
@@ -97,7 +97,7 @@ int main(void)
 		
 		get_command(inputBuffer, MAX_LINE, args, &background);  /* get next command */
 		
-		if(args[0]==NULL){ continue;   // if empty command
+		if(args[0]==NULL){ continue;   // if empty command get back to asking for a command
 		}else if(strcmp(args[0], "cd") == 0){ 
 			if(args[1] == NULL){ continue;}
 			else if(chdir(args[1])!=0) printf( ANSI_COLOR_RED "Error, cant access %s\n" ANSI_COLOR_RESET, args[1]);
@@ -105,7 +105,7 @@ int main(void)
 		}else if(strcmp(args[0], "jobs") == 0){ 
 			print_job_list(lista);
 
-		}else if(strcmp(args[0], "fg") == 0){ //FG
+		}else if(strcmp(args[0], "fg") == 0){ // Takes a background element and put it in foreground
 				int position, status;
 				if(empty_list(lista)){ 
 					printf("The list is empty.\n");
@@ -122,22 +122,22 @@ int main(void)
 					set_terminal(task -> pgid);
 					task -> state = FOREGROUND;
 					killpg(task->pgid, SIGCONT);
-					waitpid(task->pgid, &status, WUNTRACED); //esperamos a que se termine o se bloquee
-					set_terminal(getpid()); //AQUI EL HIJO RECUPERA LA SHELL
+					waitpid(task->pgid, &status, WUNTRACED); //Waiting for it to finish or stop or something
+					set_terminal(getpid()); //Parent I think is getting the shell back
 				
-					status_res = analyze_status(status, &info); //depende de como haya terminado
+					status_res = analyze_status(status, &info); //Need to know what happened to our sweet child of mine
 					printf("Foreground pid: %d, command: %s, %s, info: %d\n", task->pgid, task->command, status_strings[status_res], info);
 					
-				if(status_res == SUSPENDED){ //suspendida ponemos stopped
+				if(status_res == SUSPENDED){ //Suspended so update status to STOPPED
 					task->state = STOPPED;
-				} else if(status_res == EXITED || status_res == SIGNALED){ //si ha terminado, borrar de la lista.
+				} else if(status_res == EXITED || status_res == SIGNALED){ //If it ended by existing or being sginaled we take it out of the list
 					block_SIGCHLD();
 					delete_job(lista, task);
 					unblock_SIGCHLD();
 				}
 				} continue;
-		// BG
-		}else if (strcmp(args[0], "bg") == 0){ 
+		
+		}else if (strcmp(args[0], "bg") == 0){  //Takes a stopped element and runs it in background
 			int position, status;
 			if (args[1] == NULL){
 				position = 1;
@@ -198,22 +198,22 @@ int main(void)
 		}else if (pid_fork > 0){
 			 //We are in the parent process
 			
-				if(background != 1){	
+				if(background != 1){	//If it isnt in background, parent has to wait for its termination
 				pid_wait = waitpid(pid_fork,&status,WUNTRACED);
 				status_res = analyze_status(status, &info);
-				if(status_res == SUSPENDED)add_job(lista, new_job( pid_fork, args[0], STOPPED));
+				if(status_res == SUSPENDED)add_job(lista, new_job( pid_fork, args[0], STOPPED));	//If it didnt end but got suspended, we add it to the list
 				set_terminal(getpid());
-				
-				
+	
 				printf("Foreground pid: %d command: %s, %s , info: %d\n", pid_fork, args[0], status_strings[status_res], info);
-				}else{
+
+				}else{	//If it is in background we just add it to the list and move on cause who cares
 					add_job(lista, new_job( pid_fork, args[0], BACKGROUND));
 					printf("Background job running... pid: %d command: %s\n", pid_fork, args[0]); 
 				}
 			
 			
 		}else {
-			printf("Error creating child\n");
+			printf("Error creating child\n");	//F in the chat
 		}continue;
 	}
 		/* the steps are:
