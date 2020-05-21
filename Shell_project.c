@@ -56,11 +56,10 @@ void manej(){
 					printf("Process pid: %s, pid=%i, estado = %s\n", current->command, pid_wait, status_strings[status_res]);
 					fflush(stdout);
 					if (status_res == CONTINUED) current -> state = BACKGROUND; //Check if its running in background and updates state to background
-					else if (status_res == SUSPENDED || status_res == SIGTSTP ||status_res == SIGNALED ){ 
+					else if (status_res == SUSPENDED){ 
 					current -> state = STOPPED; //Checks if it's suspended or signaled and changes status to stopped, not working
-					add_job(lista, current);
 					}
-					else if((status_res == EXITED /*|| status_res == SIGNALED*/)) { //if it has exited or being signaled, it is deleted from the list
+					else if((status_res == EXITED || status_res == SIGNALED)) { //if it has exited or being signaled, it is deleted from the list
 						block_SIGCHLD();
 						int x = delete_job(lista, current);
 						unblock_SIGCHLD();
@@ -82,12 +81,13 @@ int main(void)
 	enum status status_res; /* status processed by analyze_status() */
 	int info;				/* info processed by analyze_status() */
 	char pwd[MAX_LINE];
-	ignore_terminal_signals();
+	ignore_terminal_signals(); //Ignore
 	lista = new_list("lista");
+	signal(SIGCHLD, manej);	
 	printf(ANSI_COLOR_MAGENTA "Welcome to the best shell you'll ever see. Use ctrl^D or 'exit' to exit the Shell, use any unix command to execute it and use 'zurprise' for a... surprise ;)\n");
 	while (1)   /* Program terminates normally inside get_command() after ^D is typed*/
 	{   	
-		signal(SIGCHLD, manej);	
+		
 		
 		
 		getcwd(pwd,MAX_LINE);
@@ -101,6 +101,7 @@ int main(void)
 		}else if(strcmp(args[0], "cd") == 0){ 
 			if(args[1] == NULL){ continue;}
 			else if(chdir(args[1])!=0) printf( ANSI_COLOR_RED "Error, cant access %s\n" ANSI_COLOR_RESET, args[1]);
+		
 		}else if(strcmp(args[0], "jobs") == 0){ 
 			print_job_list(lista);
 
@@ -135,6 +136,7 @@ int main(void)
 					unblock_SIGCHLD();
 				}
 				} continue;
+		// BG
 		}else if (strcmp(args[0], "bg") == 0){ 
 			int position, status;
 			if (args[1] == NULL){
@@ -176,16 +178,17 @@ int main(void)
 			printf( ANSI_COLOR_MAGENTA "pong\n");
 		}
 		else{
-		// Below is my useless code
+		
 		pid_fork = fork();	
 		if(pid_fork == 0){ //We are in the child process
 			new_process_group(getpid());
 				
 		if( background == 0){ 
 			set_terminal(getpid()); // works properly
-			restore_terminal_signals(); 
+			
 		}
-			execvp(args[0], args);	
+			restore_terminal_signals();
+			 execvp(args[0], args);	
 			// cant insert variables in perror so there it goes, a beautiful printf
 			printf(ANSI_COLOR_RED "Error: command not found: %s\n" ANSI_COLOR_RESET, args[0]);
 			
@@ -198,18 +201,14 @@ int main(void)
 				if(background != 1){	
 				pid_wait = waitpid(pid_fork,&status,WUNTRACED);
 				status_res = analyze_status(status, &info);
-				if(status == SIGNALED) manej(status_res);
+				if(status_res == SUSPENDED)add_job(lista, new_job( pid_fork, args[0], STOPPED));
 				set_terminal(getpid());
 				
 				
-				printf("Foreground pid: %d command: %s, %d , info: %d\n", pid_fork, args[0], status_res, info);
+				printf("Foreground pid: %d command: %s, %s , info: %d\n", pid_fork, args[0], status_strings[status_res], info);
 				}else{
-					set_terminal(getpid()); 
-					status_res = analyze_status(status, &info);
 					add_job(lista, new_job( pid_fork, args[0], BACKGROUND));
-					if(status_res == SIGCHLD) manej();
 					printf("Background job running... pid: %d command: %s\n", pid_fork, args[0]); 
-
 				}
 			
 			
